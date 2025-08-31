@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Route Delivery App</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh; color: #333;
+    }
+    .app-container { max-width: 480px; margin: 0 auto; background: #fff; min-height: 100vh; box-shadow: 0 0 20px rgba(0,0,0,.1); }
+    .header { background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%); color: #fff; padding: 20px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,.2); }
+    .header h1 { font-size: 1.5rem; margin-bottom: 5px; }
+    .header .subtitle { opacity: .9; font-size: .9rem; }
+    .screen { display: none; padding: 20px; min-height: calc(100vh - 80px); }
+    .screen.active { display: block; }
+
+    .upload-area { border: 2px dashed #3498db; border-radius: 12px; padding: 40px 20px; text-align: center; margin: 20px 0; background: #f8f9fa; cursor: pointer; transition: all .3s ease; }
+    .upload-area:hover { border-color: #2980b9; background: #e3f2fd; }
+    .upload-area.dragover { border-color: #27ae60; background: #d5f4e6; }
+
+    .btn { background: linear-gradient(135deg,#3498db,#2980b9); color:#fff; border:none; padding:12px 24px; border-radius:8px; cursor:pointer; font-size:1rem; font-weight:500; transition: all .3s ease; width:100%; margin:10px 0; }
+    .btn:hover { transform: translateY(-2px); box-shadow:0 4px 12px rgba(52,152,219,.3); }
+    .btn:disabled { opacity:.6; cursor:not-allowed; transform:none; }
+    .btn-danger { background: linear-gradient(135deg,#e74c3c,#c0392b); }
+    .btn-success { background: linear-gradient(135deg,#27ae60,#229954); }
+
+    .route-card { background:#fff; border-radius:12px; padding:20px; margin:15px 0; box-shadow:0 4px 12px rgba(0,0,0,.1); border-left:4px solid #3498db; cursor:pointer; transition: all .3s ease; }
+    .route-card:hover { transform: translateY(-2px); box-shadow:0 6px 20px rgba(0,0,0,.15); }
+    .route-title { font-size:1.2rem; font-weight:700; color:#2c3e50; margin-bottom:8px; }
+    .route-stats { display:flex; justify-content:space-between; color:#7f8c8d; font-size:.9rem; }
+
+    .delivery-item { background:#fff; border-radius:8px; padding:15px; margin:10px 0; box-shadow:0 2px 8px rgba(0,0,0,.1); border-left:4px solid #95a5a6; transition: all .3s ease; position:relative; }
+    .delivery-item.completed { border-left-color:#27ae60; background:#d5f4e6; }
+    .delivery-item.exception { border-left-color:#e74c3c; background:#fadbd8; }
+    .delivery-address { font-weight:700; font-size:1.1rem; margin-bottom:5px; }
+    .delivery-details { color:#7f8c8d; font-size:.9rem; margin-bottom:8px; }
+    .delivery-comments { background:#fff3cd; padding:8px; border-radius:4px; font-size:.8rem; margin:8px 0; }
+    .delivery-actions { display:flex; gap:10px; margin-top:10px; }
+    .delivery-actions button { flex:1; padding:8px; border:none; border-radius:6px; cursor:pointer; font-size:.9rem; }
+    .btn-complete { background:#27ae60; color:#fff; }
+    .btn-exception { background:#e74c3c; color:#fff; }
+
+    .progress-bar { width:100%; height:8px; background:#ecf0f1; border-radius:4px; margin:20px 0; overflow:hidden; }
+    .progress-fill { height:100%; background: linear-gradient(90deg,#27ae60,#2ecc71); transition: width .3s ease; }
+
+    .status-display { background:#f8f9fa; padding:15px; border-radius:8px; margin:15px 0; text-align:center; }
+
+    .modal { display:none; position:fixed; inset:0; background:rgba(0,0,0,.7); z-index:1000; align-items:center; justify-content:center; }
+    .modal.show { display:flex; }
+    .modal-content { background:#fff; padding:20px; border-radius:12px; width:90%; max-width:400px; max-height:80vh; overflow-y:auto; }
+
+    .form-group { margin:15px 0; }
+    .form-group label { display:block; margin-bottom:5px; font-weight:500; }
+    .form-group input, .form-group textarea, .form-group select { width:100%; padding:10px; border:1px solid #ddd; border-radius:6px; font-size:1rem; }
+
+    .photo-preview { width:100%; max-height:200px; border-radius:8px; margin-top:10px; }
+
+    .navigation { position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; background:#fff; padding:15px; box-shadow:0 -2px 10px rgba(0,0,0,.1); display:flex; gap:10px; }
+
+    .hidden { display:none; }
+    .complaint-flag { background:#fff3cd; border:1px solid #ffeaa7; border-radius:6px; padding:10px; margin:10px 0; font-size:.9rem; }
+    .complaint-flag .icon { color:#f39c12; margin-right:5px; }
+
+    #file-input { display:none; }
+    .loading { text-align:center; padding:40px; }
+    .spinner { border:3px solid #f3f3f3; border-top:3px solid #3498db; border-radius:50%; width:30px; height:30px; animation: spin 1s linear infinite; margin:0 auto 15px; }
+    @keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
+
+    .current-delivery { background: linear-gradient(135deg,#74b9ff,#0984e3); color:#fff; border-left-color:#0984e3 !important; }
+    .delivery-sequence { position:absolute; top:10px; right:15px; background:#3498db; color:#fff; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:.8rem; font-weight:700; }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="header">
+      <h1>Route Delivery App</h1>
+      <div class="subtitle">Digital delivery management system</div>
+    </div>
+
+    <!-- Screen 1: PDF Upload -->
+    <div id="upload-screen" class="screen active">
+      <h2 style="margin-bottom: 20px;">Load Daily Route Reports</h2>
+      <p style="margin-bottom: 20px; color: #7f8c8d;">Upload your NZME Daily Activity and Delivery List PDF reports to begin.</p>
+
+      <div class="upload-area" id="upload-area">
+        <div style="font-size: 3rem; margin-bottom: 15px; color: #3498db;">📄</div>
+        <h3>Click to Upload PDF Reports</h3>
+        <p style="margin-top: 10px; color: #7f8c8d;">Drag and drop files here or click to browse</p>
+      </div>
+      <input type="file" id="file-input" accept="application/pdf" multiple />
+
+      <div id="upload-status" class="status-display hidden">
+        <div class="loading">
+          <div class="spinner"></div>
+          Processing PDF reports...
+        </div>
+      </div>
+
+      <div id="parsed-routes" class="hidden">
+        <h3 style="margin: 20px 0 15px;">Available Routes:</h3>
+        <div id="routes-container"></div>
+        <button class="btn" id="start-deliveries-btn">Start Deliveries</button>
+      </div>
+    </div>
+
+    <!-- Screen 2: Route Dashboard -->
+    <div id="dashboard-screen" class="screen">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2 id="route-title">Route Dashboard</h2>
+        <button class="btn" style="width:auto; padding:8px 16px;" id="back-to-upload">← Back</button>
+      </div>
+
+      <div class="status-display">
+        <div style="display:flex; justify-content:space-between;">
+          <div><strong id="completed-count">0</strong><br/>Completed</div>
+          <div><strong id="remaining-count">0</strong><br/>Remaining</div>
+          <div><strong id="exception-count">0</strong><br/>Exceptions</div>
+        </div>
+        <div class="progress-bar"><div id="progress-fill" class="progress-fill" style="width:0%"></div></div>
+      </div>
+
+      <div id="complaints-section" class="hidden">
+        <h3>Daily Activity Alerts:</h3>
+        <div id="complaints-list"></div>
+      </div>
+
+      <button class="btn btn-success" id="begin-route">Begin Route Delivery</button>
+    </div>
+
+    <!-- Screen 3: Delivery Interface -->
+    <div id="delivery-screen" class="screen">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <h2>Delivery Progress</h2>
+        <button class="btn" style="width:auto; padding:8px 16px;" id="to-dashboard">Dashboard</button>
+      </div>
+
+      <div class="progress-bar"><div id="delivery-progress" class="progress-fill" style="width:0%"></div></div>
+
+      <div id="current-delivery-info" class="status-display">
+        <div>Delivery <span id="current-position">1</span> of <span id="total-deliveries">0</span></div>
+      </div>
+
+      <div id="deliveries-container"></div>
+    </div>
+
+    <!-- Screen 4: Route Summary -->
+    <div id="summary-screen" class="screen">
+      <div style="text-align:center; margin:40px 0;">
+        <div style="font-size:4rem; margin-bottom:20px;">✅</div>
+        <h2>Route Complete!</h2>
+        <p style="color:#7f8c8d; margin:15px 0;">All deliveries have been processed</p>
+      </div>
+
+      <div class="status-display">
+        <h3>Route Summary</h3>
+        <div style="margin:15px 0;">
+          <div><strong>Total Deliveries:</strong> <span id="summary-total">0</span></div>
+          <div><strong>Completed:</strong> <span id="summary-completed">0</span></div>
+          <div><strong>Exceptions:</strong> <span id="summary-exceptions">0</span></div>
+          <div><strong>Route Time:</strong> <span id="summary-time">--:--</span></div>
+        </div>
+      </div>
+
+      <div id="exceptions-summary" class="hidden">
+        <h3 style="margin:20px 0 10px;">Exception Log:</h3>
+        <div id="exceptions-list"></div>
+      </div>
+
+      <button class="btn" id="download-report">Download Report</button>
+      <button class="btn" id="start-new-route" style="background:#95a5a6;">Start New Route</button>
+    </div>
+
+    <!-- Exception Modal -->
+    <div id="exception-modal" class="modal" aria-hidden="true">
+      <div class="modal-content">
+        <h3 style="margin-bottom:20px;">Log Exception</h3>
+        <div class="form-group">
+          <label for="exception-type">Exception Type:</label>
+          <select id="exception-type">
+            <option>Unable to deliver</option>
+            <option>Address not found</option>
+            <option>Customer complaint</option>
+            <option>Security issue</option>
+            <option>Weather related</option>
+            <option>Vehicle issue</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="exception-notes">Notes:</label>
+          <textarea id="exception-notes" rows="3" placeholder="Describe the issue..."></textarea>
+        </div>
+        <div>
+          <button type="button" class="btn" id="btn-capture">📷 Take Photo</button>
+          <img id="photo-preview" class="photo-preview hidden" alt="Exception photo preview" />
+          <canvas id="photo-canvas" class="hidden"></canvas>
+        </div>
+        <div style="display:flex; gap:10px; margin-top:20px;">
+          <button class="btn btn-danger" id="btn-save-exception">Save Exception</button>
+          <button class="btn" id="btn-cancel-exception" style="background:#95a5a6;">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <div id="navigation" class="navigation hidden">
+      <button class="btn" id="prev-btn" disabled>← Previous</button>
+      <button class="btn" id="next-btn">Next →</button>
+    </div>
+  </div>
+
+  <script>
+    // ------- Global state -------
+    let appState = {
+      routes: [],
+      selectedRoute: null,
+      deliveries: [],
+      currentDeliveryIndex: 0,
+      exceptions: [],
+      startTime: null,
+      complaints: [],
+      currentExceptionIndex: null
+    };
+
+    // ------- Init -------
+    document.addEventListener('DOMContentLoaded', () => {
+      setupEventListeners();
+      requestLocationPermission();
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          console.log('PWA ready for service worker registration');
+        });
+      }
+    });
+
+    function setupEventListeners() {
+      const uploadArea = document.getElementById('upload-area');
+      const fileInput = document.getElementById('file-input');
+
+      // Click to open file dialog
+      uploadArea.addEventListener('click', () => fileInput.click());
+
+      // Drag & drop
+      uploadArea.addEventListener('dragover', (e) => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+      uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+      uploadArea.addEventListener('drop', (e) => { e.preventDefault(); uploadArea.classList.remove('dragover'); processFiles(e.dataTransfer.files); });
+
+      // File input change
+      fileInput.addEventListener('change', (e) => processFiles(e.target.files));
+
+      // Nav buttons
+      document.getElementById('back-to-upload').addEventListener('click', () => showScreen('upload-screen'));
+      document.getElementById('to-dashboard').addEventListener('click', () => showScreen('dashboard-screen'));
+      document.getElementById('begin-route').addEventListener('click', beginDeliveries);
+      document.getElementById('start-deliveries-btn').addEventListener('click', proceedToRoute);
+
+      // Bottom paginator
+      document.getElementById('prev-btn').addEventListener('click', previousDelivery);
+      document.getElementById('next-btn').addEventListener('click', nextDelivery);
+
+      // Summary buttons
+      document.getElementById('download-report').addEventListener('click', downloadReport);
+      document.getElementById('start-new-route').addEventListener('click', startNewRoute);
+
+      // Exception modal
+      document.getElementById('btn-capture').addEventListener('click', capturePhoto);
+      document.getElementById('btn-save-exception').addEventListener('click', saveException);
+      document.getElementById('btn-cancel-exception').addEventListener('click', closeExceptionModal);
+
+      // Keyboard shortcuts (only on delivery screen)
+      document.addEventListener('keydown', (e) => {
+        if (!document.getElementById('delivery-screen').classList.contains('active')) return;
+        if (e.key === 'c' || e.key === 'C') completeDelivery(appState.currentDeliveryIndex);
+        else if (e.key === 'e' || e.key === 'E') logException(appState.currentDeliveryIndex);
+        else if (e.key === 'ArrowLeft') previousDelivery();
+        else if (e.key === 'ArrowRight') nextDelivery();
+      });
+    }
+
+    // ------- File processing (mock) -------
+    async function processFiles(files) {
+      if (!files || files.length === 0) return;
+      document.getElementById('upload-status').classList.remove('hidden');
+      await simulatePDFProcessing(files);
+      document.getElementById('upload-status').classList.add('hidden');
+      document.getElementById('parsed-routes').classList.remove('hidden');
+    }
+
+    async function simulatePDFProcessing(files) {
+      await new Promise(r => setTimeout(r, 1200));
+      appState.routes = [
+        { name: 'HOWICK06', date: '01-Sep-2025', totalDeliveries: 122, publications: { NZH: 110, NZHR: 10, WD: 2 } },
+        { name: 'HOWICK13', date: '01-Sep-2025', totalDeliveries: 33, publications: { NZH: 33 } }
+      ];
+      appState.complaints = [
+        { address: '35 Beach Road', type: 'Restart', publication: 'NZH', note: 'Service restart - WKLY7' },
+        { address: '38B Selwyn Road', type: 'Restart', publication: 'NZH', note: 'Service restart - WKLY7' }
+      ];
+      displayRoutes();
+    }
+
+    function displayRoutes() {
+      const container = document.getElementById('routes-container');
+      container.innerHTML = '';
+      appState.routes.forEach((route, index) => {
+        const card = document.createElement('div');
+        card.className = 'route-card';
+        card.addEventListener('click', () => selectRoute(index));
+        const pubList = Object.entries(route.publications).map(([p, q]) => `${p}: ${q}`).join(', ');
+        card.innerHTML = `
+          <div class="route-title">${route.name}</div>
+          <div class="route-stats">
+            <span>${route.totalDeliveries} deliveries</span>
+            <span>${route.date}</span>
+          </div>
+          <div style="margin-top:8px; font-size:.8rem; color:#7f8c8d;">${pubList}</div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function selectRoute(routeIndex) {
+      appState.selectedRoute = routeIndex;
+      const cards = document.querySelectorAll('.route-card');
+      cards.forEach((card, i) => {
+        card.style.borderLeftColor = i === routeIndex ? '#27ae60' : '#3498db';
+        card.style.background = i === routeIndex ? '#d5f4e6' : '#fff';
+      });
+    }
+
+    function proceedToRoute() {
+      if (appState.selectedRoute === null) { alert('Please select a route first'); return; }
+      loadDeliveryData();
+      updateDashboard();
+      showScreen('dashboard-screen');
+    }
+
+    function loadDeliveryData() {
+      appState.deliveries = [
+        { id:1, address:'21 Central Terrace, APT 4', publication:'NZH', quantity:2, comments:'Chong Hong ltd', sequence:1, status:'pending', hasComplaint:false },
+        { id:2, address:'87 Picton Street, APT G', publication:'NZH', quantity:1, comments:'Push paper beneath glass door in front of Aunt Lee\'s Sushi', sequence:2, status:'pending', hasComplaint:false },
+        { id:3, address:'71 Picton Street', publication:'NZHR', quantity:6, comments:'Paper Plus Howick - Deliver DOCKET with Newspaper', sequence:3, status:'pending', hasComplaint:false },
+        { id:4, address:'18 Moore Street', publication:'NZH', quantity:1, comments:'Greenland Cafe', sequence:4, status:'pending', hasComplaint:false },
+        { id:5, address:'35 Beach Road', publication:'NZH', quantity:1, comments:'Service restart - check with customer', sequence:5, status:'pending', hasComplaint:true }
+      ];
+      appState.currentDeliveryIndex = 0;
+      appState.startTime = new Date();
+    }
+
+    // ------- Screens / UI -------
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(screenId).classList.add('active');
+
+      const navigation = document.getElementById('navigation');
+      if (screenId === 'delivery-screen') {
+        navigation.classList.remove('hidden');
+        updateDeliveryScreen();
+      } else {
+        navigation.classList.add('hidden');
+      }
+
+      if (screenId === 'dashboard-screen') updateDashboard();
+    }
+
+    function updateDashboard() {
+      const route = appState.routes[appState.selectedRoute];
+      document.getElementById('route-title').textContent = `Route ${route.name}`;
+
+      const completed = appState.deliveries.filter(d => d.status === 'completed').length;
+      const exceptions = appState.exceptions.length;
+      const remaining = appState.deliveries.length - completed - exceptions;
+
+      document.getElementById('completed-count').textContent = completed;
+      document.getElementById('remaining-count').textContent = Math.max(remaining, 0);
+      document.getElementById('exception-count').textContent = exceptions;
+
+      const progress = appState.deliveries.length ? ((completed + exceptions) / appState.deliveries.length) * 100 : 0;
+      document.getElementById('progress-fill').style.width = `${progress}%`;
+
+      // complaints
+      const complaintsSection = document.getElementById('complaints-section');
+      const complaintsList = document.getElementById('complaints-list');
+      if (appState.complaints.length) {
+        complaintsList.innerHTML = appState.complaints.map(c => `
+          <div class="complaint-flag"><span class="icon">⚠️</span><strong>${c.address}</strong> - ${c.type}: ${c.note}</div>
+        `).join('');
+        complaintsSection.classList.remove('hidden');
+      } else {
+        complaintsSection.classList.add('hidden');
+        complaintsList.innerHTML = '';
+      }
+    }
+
+    function updateDeliveryScreen() {
+      const container = document.getElementById('deliveries-container');
+      const currentIndex = appState.currentDeliveryIndex;
+
+      if (currentIndex >= appState.deliveries.length) { showSummary(); return; }
+
+      document.getElementById('current-position').textContent = currentIndex + 1;
+      document.getElementById('total-deliveries').textContent = appState.deliveries.length;
+      document.getElementById('delivery-progress').style.width = `${(currentIndex / appState.deliveries.length) * 100}%`;
+
+      container.innerHTML = '';
+      for (let i = Math.max(0, currentIndex - 1); i < Math.min(appState.deliveries.length, currentIndex + 4); i++) {
+        const d = appState.deliveries[i];
+        const isCurrent = i === currentIndex;
+        const div = document.createElement('div');
+        div.className = `delivery-item ${d.status} ${isCurrent ? 'current-delivery' : ''}`;
+        div.innerHTML = `
+          <div class="delivery-sequence">${d.sequence}</div>
+          <div class="delivery-address">${d.address}</div>
+          <div class="delivery-details">${d.publication} × ${d.quantity}</div>
+          ${d.comments ? `<div class="delivery-comments">${d.comments}</div>` : ''}
+          ${d.hasComplaint ? `<div class=\"complaint-flag\"><span class=\"icon\">⚠️</span>Check Daily Activity alerts for this address</div>` : ''}
+          ${isCurrent && d.status === 'pending' ? `
+            <div class="delivery-actions">
+              <button class="btn-complete" onclick="completeDelivery(${i})">✓ Complete Delivery</button>
+              <button class="btn-exception" onclick="logException(${i})">⚠ Exception</button>
+            </div>
+          ` : ''}
+        `;
+        container.appendChild(div);
+      }
+
+      document.getElementById('prev-btn').disabled = currentIndex === 0;
+      document.getElementById('next-btn').disabled = currentIndex >= appState.deliveries.length - 1;
+    }
+
+    // ------- Delivery actions -------
+    async function completeDelivery(index) {
+      const d = appState.deliveries[index];
+      const location = await getCurrentLocation();
+      const timestamp = new Date();
+      d.status = 'completed';
+      d.completedAt = timestamp;
+      d.location = location;
+      if (index === appState.currentDeliveryIndex) appState.currentDeliveryIndex++;
+      updateDeliveryScreen();
+      updateDashboard();
+      showToast('Delivery completed successfully!');
+    }
+
+    function logException(index) {
+      appState.currentExceptionIndex = index;
+      document.getElementById('exception-modal').classList.add('show');
+      document.getElementById('exception-modal').setAttribute('aria-hidden', 'false');
+    }
+
+    function closeExceptionModal() {
+      document.getElementById('exception-modal').classList.remove('show');
+      document.getElementById('exception-modal').setAttribute('aria-hidden', 'true');
+      document.getElementById('exception-notes').value = '';
+      document.getElementById('photo-preview').classList.add('hidden');
+      document.getElementById('photo-preview').src = '';
+      document.getElementById('exception-type').selectedIndex = 0;
+    }
+
+    async function saveException() {
+      const index = appState.currentExceptionIndex;
+      const d = appState.deliveries[index];
+      const exception = {
+        deliveryId: d.id,
+        address: d.address,
+        type: document.getElementById('exception-type').value,
+        notes: document.getElementById('exception-notes').value,
+        timestamp: new Date(),
+        location: await getCurrentLocation(),
+        photo: document.getElementById('photo-preview').src || null
+      };
+      appState.exceptions.push(exception);
+      d.status = 'exception';
+      d.exception = exception;
+      if (index === appState.currentDeliveryIndex) appState.currentDeliveryIndex++;
+      closeExceptionModal();
+      updateDeliveryScreen();
+      updateDashboard();
+      showToast('Exception logged successfully!');
+    }
+
+    function showSummary() {
+      const completed = appState.deliveries.filter(d => d.status === 'completed').length;
+      const exceptions = appState.exceptions.length;
+      const total = appState.deliveries.length;
+      document.getElementById('summary-total').textContent = total;
+      document.getElementById('summary-completed').textContent = completed;
+      document.getElementById('summary-exceptions').textContent = exceptions;
+      if (appState.startTime) {
+        const durationMs = new Date() - appState.startTime;
+        const h = Math.floor(durationMs / 3600000);
+        const m = Math.floor((durationMs % 3600000) / 60000);
+        document.getElementById('summary-time').textContent = `${h}:${String(m).padStart(2,'0')}`;
+      }
+      if (exceptions > 0) {
+        const exList = document.getElementById('exceptions-list');
+        exList.innerHTML = appState.exceptions.map(ex => `
+          <div class="delivery-item exception">
+            <div class="delivery-address">${ex.address}</div>
+            <div class="delivery-details">${ex.type}</div>
+            <div class="delivery-comments">${ex.notes || ''}</div>
+            <div style="font-size:.8rem; color:#7f8c8d; margin-top:5px;">${new Date(ex.timestamp).toLocaleTimeString()}</div>
+          </div>
+        `).join('');
+        document.getElementById('exceptions-summary').classList.remove('hidden');
+      } else {
+        document.getElementById('exceptions-summary').classList.add('hidden');
+      }
+      showScreen('summary-screen');
+    }
+
+    function downloadReport() {
+      const route = appState.routes[appState.selectedRoute];
+      const completed = appState.deliveries.filter(d => d.status === 'completed').length;
+      const report = {
+        route: route?.name || 'UNKNOWN',
+        date: route?.date || '',
+        startTime: appState.startTime,
+        endTime: new Date(),
+        totalDeliveries: appState.deliveries.length,
+        completedDeliveries: completed,
+        exceptions: appState.exceptions,
+        deliveryLog: appState.deliveries.map(d => ({
+          address: d.address,
+          publication: d.publication,
+          quantity: d.quantity,
+          status: d.status,
+          timestamp: d.completedAt,
+          location: d.location
+        }))
+      };
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Route_${(route?.name||'')}_${new Date().toISOString().split('T')[0]}_Report.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showToast('Report downloaded successfully!');
+    }
+
+    function startNewRoute() {
+      appState = { routes: [], selectedRoute: null, deliveries: [], currentDeliveryIndex: 0, exceptions: [], startTime: null, complaints: [], currentExceptionIndex: null };
+      document.getElementById('parsed-routes').classList.add('hidden');
+      document.getElementById('routes-container').innerHTML = '';
+      document.getElementById('file-input').value = '';
+      showScreen('upload-screen');
+    }
+
+    // ------- Helpers -------
+    function showToast(message) {
+      const toast = document.createElement('div');
+      toast.style.cssText = `position:fixed; top:20px; left:50%; transform:translateX(-50%); background:#27ae60; color:#fff; padding:12px 24px; border-radius:8px; z-index:2000; font-weight:500; box-shadow:0 4px 12px rgba(0,0,0,.2);`;
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2500);
+    }
+
+    async function capturePhoto() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        const video = document.createElement('video');
+        video.srcObject = stream; await video.play();
+        const canvas = document.getElementById('photo-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        setTimeout(() => {
+          ctx.drawImage(video, 0, 0);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          const preview = document.getElementById('photo-preview');
+          preview.src = dataUrl; preview.classList.remove('hidden');
+          stream.getTracks().forEach(t => t.stop());
+        }, 800);
+      } catch (e) {
+        alert('Camera access denied. Please enable camera permissions.');
+      }
+    }
+
+    async function getCurrentLocation() {
+      return new Promise(resolve => {
+        if (!navigator.geolocation) return resolve({ latitude:null, longitude:null, error:'GPS not supported', timestamp:new Date() });
+        navigator.geolocation.getCurrentPosition(
+          pos => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy: pos.coords.accuracy, timestamp: new Date() }),
+          err => resolve({ latitude: null, longitude: null, error: err.message, timestamp: new Date() }),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      });
+    }
+
+    async function requestWakeLock() {
+      try { if (navigator.wakeLock) await navigator.wakeLock.request('screen'); } catch (e) { console.warn('Wake lock failed:', e); }
+    }
+
+    function beginDeliveries() { requestWakeLock(); showScreen('delivery-screen'); }
+
+  </script>
+</body>
+</html>
